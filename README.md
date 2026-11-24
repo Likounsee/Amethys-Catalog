@@ -29,6 +29,6 @@ The workflow also runs every Monday at 04:17 UTC. The current ingestion adapter 
 
 ## Data scope
 
-The current data import covers Windows PC main games from IGDB. Supported store identities (Steam, GOG, Epic, EA, Ubisoft, Battle.net, Amazon Games and Humble) are optional metadata: a game remains in the master catalogue even when no supported offer is currently known. Unknown store identities are omitted, not used to discard the game. The catalogue does not contain user accounts, entitlements, local paths, installations, download state, or commercial game files.
+The current data import covers Windows PC main games from IGDB. Amethys IDs are the canonical primary keys in the catalogue database; IGDB and store identifiers are recorded separately in the generic source-identity table and registry. The current importer writes IGDB and supported store identities into that mapping. Supported store identities (Steam, GOG, Epic, EA, Ubisoft, Battle.net, Amazon Games and Humble) are optional metadata: a game remains in the master catalogue even when no supported offer is currently known. Unknown store identities are omitted, not used to discard the game. The catalogue does not contain user accounts, entitlements, local paths, installations, download state, or commercial game files.
 
 Respect IGDB's applicable attribution and partnership requirements before commercial distribution.

@@ -25,10 +25,10 @@ The global Store catalogue is separate from each PC's local installed-game libra
 
 The first run imports the stable Amethys ID registry from the public Amethys-Launcher repository, then keeps the registry in this repository for subsequent runs. Do not delete or regenerate it: published Amethys IDs must remain stable and must never be reused.
 
-The workflow also runs every Monday at 04:17 UTC. It builds from IGDB, validates the SQLite source, compact index, detail shards and checksums, then publishes the static site.
+The workflow also runs every Monday at 04:17 UTC. The current ingestion adapter imports Windows PC metadata from IGDB, validates the SQLite source, compact index, detail shards and checksums, then publishes the static site. IGDB is an ingestion source, not the owner of Amethys game identities or the permanent catalogue format. Future official publisher/store feeds can be added as separate ingestion adapters without changing Amethys IDs or the public distribution contract.
 
 ## Data scope
 
-Windows PC main games from IGDB, with supported external identities for Steam, GOG, Epic, EA, Ubisoft, Battle.net, Amazon Games and Humble. itch.io and unknown sources are excluded. The catalogue does not contain user accounts, entitlements, local paths, installations, download state, or commercial game files.
+The current data import covers Windows PC main games from IGDB. Supported store identities (Steam, GOG, Epic, EA, Ubisoft, Battle.net, Amazon Games and Humble) are optional metadata: a game remains in the master catalogue even when no supported offer is currently known. Unknown store identities are omitted, not used to discard the game. The catalogue does not contain user accounts, entitlements, local paths, installations, download state, or commercial game files.
 
 Respect IGDB's applicable attribution and partnership requirements before commercial distribution.

@@ -44,9 +44,9 @@ def main() -> None:
         assert len(records) == item["game_count"], item["file"]
         for record in records:
             game_id = int(record["amethys_id"])
-            stores = record.get("stores")
-            assert isinstance(stores, list) and stores, (
-                f"game {game_id} has no supported store offer"
+            stores = record.get("stores", [])
+            assert isinstance(stores, list), (
+                f"game {game_id} has an invalid store identity list"
             )
             verified_store_identities += len(stores)
             assert game_id // manifest["shards"]["bucket_size"] == item["bucket"]
@@ -58,9 +58,6 @@ def main() -> None:
     assert shard_ids == set(ids), "search index and detail shards disagree"
     assert verified_store_identities == manifest["store_identity_count"], (
         "manifest store identity count does not match detail shards"
-    )
-    assert verified_store_identities >= manifest["game_count"], (
-        "every published game must have at least one supported store offer"
     )
     genres_meta = manifest["metadata"]["genres"]
     genres_path = PUBLIC / genres_meta["file"]

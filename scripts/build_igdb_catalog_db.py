@@ -489,6 +489,14 @@ def main() -> None:
                 "release_date": row["release_date"],
                 "cover_url": row["cover_url"],
                 "genres": json.loads(row["genres_json"] or "[]"),
+                "source_ids": [
+                    {"source": source, "external_id": external_id}
+                    for source, external_id in connection.execute(
+                        "SELECT source, external_id FROM game_source_ids "
+                        "WHERE amethys_id = ? ORDER BY source, external_id",
+                        (int(row["amethys_id"]),),
+                    )
+                ],
                 "stores": [],
             }
             genres_seen.update(current_record["genres"])
@@ -509,6 +517,9 @@ def main() -> None:
     if current_bucket is not None:
         flush_shard(current_bucket, shard_records)
 
+    source_identity_count = connection.execute(
+        "SELECT COUNT(*) FROM game_source_ids"
+    ).fetchone()[0]
     connection.close()
     genres_info = write_json(
         metadata_dir / "genres.json",
@@ -524,6 +535,7 @@ def main() -> None:
         "platform": "windows-pc",
         "game_count": inserted_games,
         "store_identity_count": inserted_stores,
+        "source_identity_count": source_identity_count,
         "search_index": {
             **index_info,
             "format": "json-array-zstd",

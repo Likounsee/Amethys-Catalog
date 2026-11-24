@@ -75,6 +75,9 @@ jobs:
               "SELECT amethys_id FROM game_source_ids WHERE source = ? AND external_id = ?",
               ("steam", "test-product-1"),
           ).fetchone()[0] == 1001
+          from scripts.build_igdb_catalog_db import split_source_identity_key
+          assert split_source_identity_key("igdb:42") == ("igdb", "42")
+          assert split_source_identity_key("store:steam:570") == ("store:steam", "570")
           print("SQLite schema and provider-independent identity checks OK")
           PY
 

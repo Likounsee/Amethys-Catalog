@@ -60,7 +60,22 @@ jobs:
           assert {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} >= {
               "games", "game_source_ids", "game_stores", "catalog_meta"
           }
-          print("SQLite schema OK")
+          game_columns = {row[1]: row[5] for row in db.execute("PRAGMA table_info(games)")}
+          assert game_columns["amethys_id"] == 1, "Amethys ID must be the games primary key"
+          assert game_columns["igdb_id"] == 0, "IGDB ID must never be the games primary key"
+          db.execute(
+              "INSERT INTO games(amethys_id, igdb_id, name, updated_at) VALUES (?, NULL, ?, ?)",
+              (1001, "Provider-independent test game", "2026-01-01T00:00:00Z"),
+          )
+          db.execute(
+              "INSERT INTO game_source_ids(source, external_id, amethys_id) VALUES (?, ?, ?)",
+              ("steam", "test-product-1", 1001),
+          )
+          assert db.execute(
+              "SELECT amethys_id FROM game_source_ids WHERE source = ? AND external_id = ?",
+              ("steam", "test-product-1"),
+          ).fetchone()[0] == 1001
+          print("SQLite schema and provider-independent identity checks OK")
           PY
 
       - name: Build catalogue from IGDB

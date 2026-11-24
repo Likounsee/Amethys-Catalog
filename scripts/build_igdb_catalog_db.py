@@ -340,7 +340,7 @@ def main() -> None:
 
     def write_zstd_json(path: Path, value: object) -> dict:
         raw = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        compressed = zstandard.ZstdCompressor(level=19, threads=-1).compress(raw)
+        compressed = zstandard.ZstdCompressor(level=19, threads=0).compress(raw)
         path.write_bytes(compressed)
         return {
             "file": path.relative_to(public_dir).as_posix(),

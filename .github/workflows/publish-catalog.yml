@@ -1,0 +1,120 @@
+name: Build and publish Amethys game catalogue
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: amethys-catalog-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Generate compact catalogue
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - name: Checkout catalogue repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore stable Amethys ID registry on first run
+        run: |
+          mkdir -p catalogs
+          if [ ! -s catalogs/amethys-id-registry.json ]; then
+            curl --fail --location --retry 5 \
+              https://raw.githubusercontent.com/Likounsee/Amethys-Launcher/main/catalogs/amethys-id-registry.json \
+              --output catalogs/amethys-id-registry.json
+          fi
+          test -s catalogs/amethys-id-registry.json
+
+      - name: Install Zstandard encoder
+        run: python -m pip install --disable-pip-version-check zstandard==0.25.0
+
+      - name: Validate generator and SQLite schema
+        run: |
+          python -m py_compile scripts/build_igdb_catalog_db.py
+          python - <<'PY'
+          import sqlite3
+          from pathlib import Path
+          db = sqlite3.connect(":memory:")
+          db.executescript(Path("scripts/catalog_schema.sql").read_text(encoding="utf-8"))
+          assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+          assert {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} >= {
+              "games", "game_stores", "catalog_meta"
+          }
+          print("SQLite schema OK")
+          PY
+
+      - name: Build catalogue from IGDB
+        env:
+          IGDB_CLIENT_ID: \${{ secrets.IGDB_CLIENT_ID }}
+          IGDB_CLIENT_SECRET: \${{ secrets.IGDB_CLIENT_SECRET }}
+        run: python scripts/build_igdb_catalog_db.py
+
+      - name: Verify index, shards and manifest
+        run: python scripts/verify_public_catalog.py
+
+      - name: Persist stable Amethys IDs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add catalogs/amethys-id-registry.json
+          if git diff --cached --quiet; then
+            echo "ID registry unchanged."
+          else
+            git commit -m "Update stable Amethys catalogue ID registry"
+            git push origin HEAD:main
+          fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare static site
+        run: |
+          cat > public/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>Amethys Game Catalogue</title>
+            </head>
+            <body>
+              <h1>Amethys Game Catalogue</h1>
+              <p>Public, read-only Windows PC game catalogue for Amethys Launcher.</p>
+              <p><a href="./manifest.json">Catalogue manifest</a></p>
+              <p>The launcher downloads the compact search index first and fetches game details only when needed.</p>
+            </body>
+          </html>
+          HTML
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: \${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish catalogue
+        id: deployment
+        uses: actions/deploy-pages@v4

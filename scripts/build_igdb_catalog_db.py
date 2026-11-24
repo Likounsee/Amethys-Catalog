@@ -177,7 +177,7 @@ def main() -> None:
     skipped_duplicate_store_ids = 0
     last_igdb_id = 0
     fields = (
-        "id,name,category,slug,summary,first_release_date,cover.image_id,genres.name,"
+        "id,name,category,version_parent,slug,summary,first_release_date,cover.image_id,genres.name,"
         "external_games.uid,external_games.name,external_games.url,"
         "external_games.external_game_source.name"
     )
@@ -207,7 +207,7 @@ def main() -> None:
                     # IGDB category 0 is a main game. Null is accepted as the
                     # default category; DLC and other secondary entries are skipped.
                     category = game.get("category")
-                    if category not in (None, 0):
+                    if category not in (None, 0) or game.get("version_parent") is not None:
                         continue
                     name = str(game.get("name") or "").strip()
                     if not name:
@@ -361,10 +361,10 @@ def main() -> None:
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     index_rows = connection.execute(
-        "SELECT amethys_id, name, slug FROM games ORDER BY amethys_id"
+        "SELECT amethys_id, name, slug, genres_json FROM games ORDER BY amethys_id"
     )
     search_index = [
-        [int(row["amethys_id"]), row["name"], row["slug"]]
+        [int(row["amethys_id"]), row["name"], row["slug"], json.loads(row["genres_json"] or "[]")]
         for row in index_rows
     ]
     index_info = write_zstd_json(index_dir / "games-index.json.zst", search_index)
@@ -453,7 +453,7 @@ def main() -> None:
         "search_index": {
             **index_info,
             "format": "json-array-zstd",
-            "record_fields": ["amethys_id", "name", "slug"],
+            "record_fields": ["amethys_id", "name", "slug", "genres"],
         },
         "shards": {
             "scheme": "amethys-id-range-v1",

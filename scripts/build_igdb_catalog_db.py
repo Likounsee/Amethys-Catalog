@@ -175,7 +175,7 @@ def main() -> None:
     inserted_games = 0
     inserted_stores = 0
     skipped_duplicate_store_ids = 0
-        last_igdb_id = 0
+    last_igdb_id = 0
     fields = (
         "id,name,category,version_parent,slug,summary,first_release_date,cover.image_id,genres.name,"
         "external_games.uid,external_games.name,external_games.url,"

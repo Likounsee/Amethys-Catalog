@@ -1,6 +1,12 @@
 name: Build and publish Amethys game catalogue
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_igdb_catalog_db.py"
+      - "scripts/catalog_schema.sql"
+      - ".github/workflows/publish-catalog.yml"
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:

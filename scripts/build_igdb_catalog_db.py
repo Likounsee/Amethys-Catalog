@@ -175,6 +175,7 @@ def main() -> None:
     inserted_games = 0
     inserted_stores = 0
     skipped_duplicate_store_ids = 0
+    skipped_without_supported_store = 0
     last_igdb_id = 0
     fields = (
         "id,name,category,version_parent,slug,summary,first_release_date,cover.image_id,genres.name,"
@@ -213,11 +214,29 @@ def main() -> None:
                     if not name:
                         continue
 
+                    # Keep only unique, usable identities for stores that the
+                    # launcher can actually open. A game with no remaining offer
+                    # must not enter either the search index or detail shards.
                     store_rows = []
+                    seen_store_keys: set[tuple[str, str]] = set()
                     for external in game.get("external_games") or []:
                         record = store_record(game, external)
-                        if record:
-                            store_rows.append(record)
+                        if not record:
+                            continue
+                        store, external_id, _store_name, _url = record
+                        store_key = (store, external_id)
+                        if store_key in seen_store_keys or connection.execute(
+                            "SELECT 1 FROM game_stores WHERE store = ? AND external_id = ?",
+                            store_key,
+                        ).fetchone():
+                            skipped_duplicate_store_ids += 1
+                            continue
+                        seen_store_keys.add(store_key)
+                        store_rows.append(record)
+
+                    if not store_rows:
+                        skipped_without_supported_store += 1
+                        continue
 
                     amethys_id = igdb_to_amethys.get(igdb_id)
                     if amethys_id is None:
@@ -308,9 +327,11 @@ def main() -> None:
                 ("source", "IGDB"),
                 ("platform_filter", "Windows PC (IGDB platform 6)"),
                 ("category_filter", "0"),
+                ("store_filter", "at-least-one-supported-store-offer"),
                 ("generated_at", generated_at),
                 ("game_count", str(inserted_games)),
                 ("store_identity_count", str(inserted_stores)),
+                ("excluded_without_supported_store_count", str(skipped_without_supported_store)),
             ],
         )
         connection.execute("ANALYZE")
@@ -448,8 +469,10 @@ def main() -> None:
         "generated_at": generated_at,
         "source": "IGDB",
         "platform": "windows-pc",
+        "catalog_filter": {"required": "at-least-one-supported-store-offer"},
         "game_count": inserted_games,
         "store_identity_count": inserted_stores,
+        "excluded_without_supported_store_count": skipped_without_supported_store,
         "search_index": {
             **index_info,
             "format": "json-array-zstd",
@@ -467,7 +490,9 @@ def main() -> None:
     write_json(public_dir / "manifest.json", manifest)
 
     print(
-        f"Built {inserted_games} Windows PC games and {inserted_stores} store identities; "
+        f"Built {inserted_games} Windows PC games with {inserted_stores} supported store identities; "
+        f"excluded {skipped_without_supported_store} games without a usable supported store offer "
+        f"and skipped {skipped_duplicate_store_ids} duplicate store identities; "
         f"published {len(shard_manifest)} detail shards. "
         f"Search index={index_info['compressed_size']:,} bytes."
     )

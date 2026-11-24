@@ -96,6 +96,7 @@ jobs:
             echo "ID registry unchanged."
           else
             git commit -m "Update stable Amethys catalogue ID registry"
+            git pull --rebase origin main
             git push origin HEAD:main
           fi
 

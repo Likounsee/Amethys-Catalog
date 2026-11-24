@@ -8,7 +8,7 @@ Le catalogue maître appartient à Amethys : ses identifiants, son format public
 
 - `manifest.json` : version, nombre de jeux, empreintes SHA-256 et description des fragments.
 - `index/games-index.json.zst` : index de recherche hors ligne, limité à `amethys_id`, nom et slug.
-- `shards/{bucket}.json.zst` : fiches détaillées et identités de boutiques, partitionnées par plages d'ID Amethys.
+- `shards/{bucket}.json.zst` : fiches détaillées, identités génériques de sources (`source_ids`) et identités de boutiques, partitionnées par plages d'ID Amethys.
 - `metadata/genres.json` : liste des genres.
 
 La base SQLite complète et ses 150 Mo décompressés restent des artefacts de construction temporaires : ils ne sont pas publiés et ne sont jamais téléchargés par défaut par les utilisateurs.
@@ -25,7 +25,7 @@ Le client doit dépendre d'un contrat de fournisseur abstrait, pas de GitHub : P
 
 ## Identité stable
 
-Le registre `catalogs/amethys-id-registry.json` est persistant et versionné dans ce dépôt. Lors du premier lancement, le workflow le récupère depuis l'ancien dépôt launcher afin de conserver tous les IDs déjà publiés. Les IDs connus ne sont jamais réattribués. Ne jamais supprimer ce registre.
+Le registre `catalogs/amethys-id-registry.json` est persistant et versionné dans ce dépôt. Chaque génération exige sa présence et échoue plutôt que de recréer des identifiants si le fichier manque. Les IDs connus ne sont jamais réattribués. Ne jamais supprimer ce registre.
 
 ## Secrets et génération
 
@@ -36,7 +36,7 @@ Le catalogue est une base de fiches maîtres uniquement. Une fiche peut exister 
 ## Évolution des sources
 
 - Ne jamais utiliser un identifiant IGDB comme identifiant Amethys.
-- Le registre Amethys conserve les correspondances génériques `source:external_id` vers Amethys ID (avec l'ancien mapping IGDB conservé pour compatibilité) ; les IDs publiés ne sont jamais réattribués.
+- Le registre Amethys conserve les correspondances génériques `source:external_id` vers Amethys ID (avec l'ancien mapping IGDB conservé pour compatibilité) ; les fiches publiques exposent aussi ces identités dans `source_ids` ; les IDs publiés ne sont jamais réattribués.
 - Les prochains adaptateurs (éditeurs, boutiques ou autres sources autorisées) devront fournir des identifiants externes propres à leur source et être rapprochés d'une fiche Amethys existante avant de créer une nouvelle fiche.
 - Les données de sources différentes doivent pouvoir coexister ; une source absente ou temporairement indisponible ne doit pas effacer les données déjà validées.
 - Le format public (manifest, index, fragments) reste stable et indépendant du fournisseur d'hébergement. GitHub Pages n'est que l'hébergement actuel.

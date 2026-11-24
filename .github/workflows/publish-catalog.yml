@@ -58,8 +58,8 @@ jobs:
 
       - name: Build catalogue from IGDB
         env:
-          IGDB_CLIENT_ID: \${{ secrets.IGDB_CLIENT_ID }}
-          IGDB_CLIENT_SECRET: \${{ secrets.IGDB_CLIENT_SECRET }}
+          IGDB_CLIENT_ID: ${{ secrets.IGDB_CLIENT_ID }}
+          IGDB_CLIENT_SECRET: ${{ secrets.IGDB_CLIENT_SECRET }}
         run: python scripts/build_igdb_catalog_db.py
 
       - name: Verify index, shards and manifest
@@ -113,7 +113,7 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: \${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Publish catalogue
         id: deployment

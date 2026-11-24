@@ -58,7 +58,7 @@ jobs:
           db.executescript(Path("scripts/catalog_schema.sql").read_text(encoding="utf-8"))
           assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
           assert {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} >= {
-              "games", "game_stores", "catalog_meta"
+              "games", "game_source_ids", "game_stores", "catalog_meta"
           }
           print("SQLite schema OK")
           PY

@@ -35,6 +35,7 @@ def main() -> None:
     shard_total = 0
     shard_ids = set()
     verified_store_identities = 0
+    verified_source_identities = 0
     for item in manifest["shards"]["files"]:
         path = PUBLIC / item["file"]
         compressed = path.read_bytes()
@@ -49,6 +50,29 @@ def main() -> None:
                 f"game {game_id} has an invalid store identity list"
             )
             verified_store_identities += len(stores)
+            source_ids = record.get("source_ids", [])
+            assert isinstance(source_ids, list), (
+                f"game {game_id} has an invalid source identity list"
+            )
+            seen_source_ids = set()
+            for source_id in source_ids:
+                assert isinstance(source_id, dict), (
+                    f"game {game_id} has an invalid source identity record"
+                )
+                source = source_id.get("source")
+                external_id = source_id.get("external_id")
+                assert isinstance(source, str) and source, (
+                    f"game {game_id} has an empty source namespace"
+                )
+                assert isinstance(external_id, str) and external_id, (
+                    f"game {game_id} has an empty external identity"
+                )
+                identity = (source, external_id)
+                assert identity not in seen_source_ids, (
+                    f"game {game_id} repeats source identity {identity}"
+                )
+                seen_source_ids.add(identity)
+            verified_source_identities += len(source_ids)
             assert game_id // manifest["shards"]["bucket_size"] == item["bucket"]
             assert game_id not in shard_ids, f"duplicate game ID {game_id}"
             shard_ids.add(game_id)
@@ -59,13 +83,17 @@ def main() -> None:
     assert verified_store_identities == manifest["store_identity_count"], (
         "manifest store identity count does not match detail shards"
     )
+    assert verified_source_identities == manifest["source_identity_count"], (
+        "manifest source identity count does not match detail shards"
+    )
     genres_meta = manifest["metadata"]["genres"]
     genres_path = PUBLIC / genres_meta["file"]
     genres_bytes = genres_path.read_bytes()
     assert sha256(genres_bytes) == genres_meta["sha256"]
     print(
         f"Validated {len(ids)} games, {len(manifest['shards']['files'])} shards "
-        f"and {manifest['store_identity_count']} store identities."
+        f"and {manifest['store_identity_count']} store identities "
+        f"plus {manifest['source_identity_count']} source identities."
     )
 
 

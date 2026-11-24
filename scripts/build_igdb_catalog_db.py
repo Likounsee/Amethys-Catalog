@@ -99,14 +99,28 @@ def igdb_query(body: str, client_id: str, token: str) -> list[dict]:
     return decoded
 
 
-def load_identity_state() -> tuple[dict[int, int], set[int], dict[tuple[str, str], int]]:
-    registry = {"igdb_to_amethys_id": {}, "retired_or_known_ids": []}
+def load_identity_state() -> tuple[
+    dict[int, int], set[int], dict[tuple[str, str], int], dict[tuple[str, str], int]
+]:
+    registry = {
+        "igdb_to_amethys_id": {},
+        "source_to_amethys_id": {},
+        "retired_or_known_ids": [],
+    }
     if REGISTRY_PATH.exists():
         registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     igdb_to_amethys = {
         int(key): int(value)
         for key, value in registry.get("igdb_to_amethys_id", {}).items()
     }
+    source_ids: dict[tuple[str, str], int] = {}
+    for key, value in registry.get("source_to_amethys_id", {}).items():
+        source, separator, external_id = str(key).partition(":")
+        if separator and source and external_id:
+            source_ids[(source, external_id)] = int(value)
+    for igdb_id, amethys_id in igdb_to_amethys.items():
+        source_ids.setdefault(("igdb", str(igdb_id)), amethys_id)
+
     known_ids = {int(value) for value in registry.get("retired_or_known_ids", [])}
     previous_external: dict[tuple[str, str], int] = {}
 
@@ -124,15 +138,18 @@ def load_identity_state() -> tuple[dict[int, int], set[int], dict[tuple[str, str
                     raw_igdb_id = None
             if raw_igdb_id is not None:
                 igdb_to_amethys.setdefault(int(raw_igdb_id), amethys_id)
+                source_ids.setdefault(("igdb", str(raw_igdb_id)), amethys_id)
             for offer in game.get("offers", []):
                 provider = str(offer.get("provider_id", "")).lower()
                 external_id = str(offer.get("external_id", "")).strip()
                 if provider in ("steam", "gog", "epic", "epic-games") and external_id:
                     store = "epic" if provider == "epic-games" else provider
                     previous_external[(store, external_id)] = amethys_id
+                    source_ids.setdefault((f"store:{store}", external_id), amethys_id)
 
     known_ids.update(igdb_to_amethys.values())
-    return igdb_to_amethys, known_ids, previous_external
+    known_ids.update(source_ids.values())
+    return igdb_to_amethys, known_ids, previous_external, source_ids
 
 
 def store_record(game: dict, external: dict) -> tuple[str, str, str, str] | None:
@@ -160,7 +177,7 @@ def main() -> None:
     if not client_id or not client_secret:
         raise SystemExit("Missing IGDB_CLIENT_ID / IGDB_CLIENT_SECRET environment secrets")
 
-    igdb_to_amethys, known_ids, previous_external = load_identity_state()
+    igdb_to_amethys, known_ids, previous_external, source_ids = load_identity_state()
     next_amethys_id = max(known_ids | {1_000_000}) + 1
     token = get_token(client_id, client_secret)
     generated_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
@@ -234,8 +251,12 @@ def main() -> None:
 
                     amethys_id = igdb_to_amethys.get(igdb_id)
                     if amethys_id is None:
+                        amethys_id = source_ids.get(("igdb", str(igdb_id)))
+                    if amethys_id is None:
                         for store, external_id, _store_name, _url in store_rows:
-                            amethys_id = previous_external.get((store, external_id))
+                            amethys_id = source_ids.get((f"store:{store}", external_id))
+                            if amethys_id is None:
+                                amethys_id = previous_external.get((store, external_id))
                             if amethys_id is not None:
                                 break
                     if amethys_id is None:
@@ -247,9 +268,9 @@ def main() -> None:
                         # A legacy ID can be reused only when matched by an
                         # existing store identity; otherwise allocate a fresh ID.
                         matched = any(
-                            previous_external.get((store, external_id)) == amethys_id
+                            source_ids.get((f"store:{store}", external_id), previous_external.get((store, external_id))) == amethys_id
                             for store, external_id, _n, _u in store_rows
-                        )
+                        ) or source_ids.get(("igdb", str(igdb_id))) == amethys_id
                         if not matched:
                             while next_amethys_id in known_ids:
                                 next_amethys_id += 1
@@ -257,6 +278,9 @@ def main() -> None:
                             next_amethys_id += 1
 
                     igdb_to_amethys[igdb_id] = amethys_id
+                    source_ids[("igdb", str(igdb_id))] = amethys_id
+                    for store, external_id, _store_name, _url in store_rows:
+                        source_ids[(f"store:{store}", external_id)] = amethys_id
                     known_ids.add(amethys_id)
                     release_timestamp = game.get("first_release_date")
                     release_date = (
@@ -290,6 +314,10 @@ def main() -> None:
 
                     for store, external_id, store_name, store_url in store_rows:
                         try:
+                            connection.execute(
+                                "INSERT INTO game_source_ids(source, external_id, amethys_id) VALUES (?, ?, ?)",
+                                (f"store:{store}", external_id, amethys_id),
+                            )
                             connection.execute(
                                 """INSERT INTO game_stores
                                    (amethys_id, store, external_id, store_name, store_url)
@@ -343,6 +371,10 @@ def main() -> None:
         "schema_version": 1,
         "igdb_to_amethys_id": {
             str(key): value for key, value in sorted(igdb_to_amethys.items())
+        },
+        "source_to_amethys_id": {
+            f"{source}:{external_id}": amethys_id
+            for (source, external_id), amethys_id in sorted(source_ids.items())
         },
         "retired_or_known_ids": sorted(known_ids),
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

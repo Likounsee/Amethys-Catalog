@@ -275,12 +275,16 @@ def main() -> None:
                     })
                     connection.execute(
                         """INSERT INTO games
-                           (igdb_id, amethys_id, name, slug, summary, release_date,
+                           (amethys_id, igdb_id, name, slug, summary, release_date,
                             cover_url, genres_json, updated_at)
                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (igdb_id, amethys_id, name, game.get("slug"), game.get("summary"),
+                        (amethys_id, igdb_id, name, game.get("slug"), game.get("summary"),
                          release_date, cover_url, json.dumps(genres, ensure_ascii=False),
                          generated_at),
+                    )
+                    connection.execute(
+                        "INSERT INTO game_source_ids(source, external_id, amethys_id) VALUES (?, ?, ?)",
+                        ("igdb", str(igdb_id), amethys_id),
                     )
                     inserted_games += 1
 
@@ -288,9 +292,9 @@ def main() -> None:
                         try:
                             connection.execute(
                                 """INSERT INTO game_stores
-                                   (igdb_game_id, store, external_id, store_name, store_url)
+                                   (amethys_id, store, external_id, store_name, store_url)
                                    VALUES (?, ?, ?, ?, ?)""",
-                                (igdb_id, store, external_id, store_name, store_url),
+                                (amethys_id, store, external_id, store_name, store_url),
                             )
                             inserted_stores += 1
                         except sqlite3.IntegrityError:
@@ -317,7 +321,7 @@ def main() -> None:
         connection.executemany(
             "INSERT INTO catalog_meta(key, value) VALUES (?, ?)",
             [
-                ("schema_version", "1"),
+                ("schema_version", "2"),
                 ("source", "IGDB"),
                 ("platform_filter", "Windows PC (IGDB platform 6)"),
                 ("category_filter", "0"),
@@ -403,7 +407,7 @@ def main() -> None:
                   g.release_date, g.cover_url, g.genres_json,
                   s.store, s.external_id, s.store_name, s.store_url
            FROM games AS g
-           LEFT JOIN game_stores AS s ON s.igdb_game_id = g.igdb_id
+           LEFT JOIN game_stores AS s ON s.amethys_id = g.amethys_id
            ORDER BY g.amethys_id, s.store, s.external_id"""
     )
     current_game = None
@@ -456,7 +460,7 @@ def main() -> None:
 
     manifest = {
         "manifest_schema_version": 2,
-        "catalog_schema_version": 1,
+        "catalog_schema_version": 2,
         "catalog_version": generated_at,
         "generated_at": generated_at,
         "source": "IGDB",

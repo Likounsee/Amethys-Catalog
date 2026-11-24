@@ -35,15 +35,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Restore stable Amethys ID registry on first run
+      - name: Require the persistent Amethys ID registry
         run: |
-          mkdir -p catalogs
-          if [ ! -s catalogs/amethys-id-registry.json ]; then
-            curl --fail --location --retry 5 \
-              https://raw.githubusercontent.com/Likounsee/Amethys-Launcher/main/catalogs/amethys-id-registry.json \
-              --output catalogs/amethys-id-registry.json
-          fi
-          test -s catalogs/amethys-id-registry.json
+          test -s catalogs/amethys-id-registry.json || {
+            echo "::error::The persistent Amethys ID registry is missing. Refusing to regenerate IDs."
+            exit 1
+          }
 
       - name: Install Zstandard encoder
         run: python -m pip install --disable-pip-version-check zstandard==0.25.0

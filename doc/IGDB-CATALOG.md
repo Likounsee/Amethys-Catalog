@@ -4,7 +4,7 @@ Le dépôt dédié est [Likounsee/Amethys-Catalog](https://github.com/Likounsee/
 
 ## Format distribué
 
-Le catalogue maître appartient à Amethys : ses identifiants, son format public et ses règles de validation ne doivent pas dépendre d'un fournisseur de métadonnées. Aujourd'hui, IGDB est uniquement le premier adaptateur d'ingestion Windows PC. Le pipeline construit temporairement une base SQLite depuis cette source, valide son intégrité, puis publie uniquement des fichiers compacts :
+Le catalogue maître appartient à Amethys : ses identifiants, son format public et ses règles de validation ne doivent pas dépendre d'un fournisseur de métadonnées. Dans SQLite, `amethys_id` est la clé primaire de `games`. Les identifiants IGDB et les identifiants de boutiques sont conservés séparément dans `game_source_ids` et pointent vers l'identifiant Amethys. Aujourd'hui, IGDB est uniquement le premier adaptateur d'ingestion Windows PC. Le pipeline construit temporairement une base SQLite depuis cette source, valide son intégrité, puis publie uniquement des fichiers compacts :
 
 - `manifest.json` : version, nombre de jeux, empreintes SHA-256 et description des fragments.
 - `index/games-index.json.zst` : index de recherche hors ligne, limité à `amethys_id`, nom et slug.
@@ -36,7 +36,7 @@ Le catalogue est une base de fiches maîtres uniquement. Une fiche peut exister 
 ## Évolution des sources
 
 - Ne jamais utiliser un identifiant IGDB comme identifiant Amethys.
-- Le registre Amethys conserve les correspondances de source et les IDs attribués ; les IDs publiés ne sont jamais réattribués.
+- Le registre Amethys conserve les correspondances génériques `source:external_id` vers Amethys ID (avec l'ancien mapping IGDB conservé pour compatibilité) ; les IDs publiés ne sont jamais réattribués.
 - Les prochains adaptateurs (éditeurs, boutiques ou autres sources autorisées) devront fournir des identifiants externes propres à leur source et être rapprochés d'une fiche Amethys existante avant de créer une nouvelle fiche.
 - Les données de sources différentes doivent pouvoir coexister ; une source absente ou temporairement indisponible ne doit pas effacer les données déjà validées.
 - Le format public (manifest, index, fragments) reste stable et indépendant du fournisseur d'hébergement. GitHub Pages n'est que l'hébergement actuel.

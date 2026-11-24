@@ -277,6 +277,19 @@ def main() -> None:
                             amethys_id = next_amethys_id
                             next_amethys_id += 1
 
+                    accepted_store_rows = []
+                    for store_row in store_rows:
+                        store, external_id, _store_name, _url = store_row
+                        previous_id = source_ids.get(
+                            (f"store:{store}", external_id),
+                            previous_external.get((store, external_id)),
+                        )
+                        if previous_id is not None and previous_id != amethys_id:
+                            skipped_duplicate_store_ids += 1
+                            continue
+                        accepted_store_rows.append(store_row)
+                    store_rows = accepted_store_rows
+
                     igdb_to_amethys[igdb_id] = amethys_id
                     source_ids[("igdb", str(igdb_id))] = amethys_id
                     for store, external_id, _store_name, _url in store_rows:
@@ -368,7 +381,7 @@ def main() -> None:
 
     REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
     REGISTRY_PATH.write_text(json.dumps({
-        "schema_version": 1,
+        "schema_version": 2,
         "igdb_to_amethys_id": {
             str(key): value for key, value in sorted(igdb_to_amethys.items())
         },

@@ -99,6 +99,18 @@ def igdb_query(body: str, client_id: str, token: str) -> list[dict]:
     return decoded
 
 
+def split_source_identity_key(value: str) -> tuple[str, str] | None:
+    """Split a persisted source key at its final separator.
+
+    Source namespaces may contain a colon (for example store:steam), so
+    splitting at the first colon would silently lose the complete namespace.
+    """
+    source, separator, external_id = str(value).rpartition(":")
+    if not separator or not source or not external_id:
+        return None
+    return source, external_id
+
+
 def load_identity_state() -> tuple[
     dict[int, int], set[int], dict[tuple[str, str], int], dict[tuple[str, str], int]
 ]:
@@ -115,9 +127,9 @@ def load_identity_state() -> tuple[
     }
     source_ids: dict[tuple[str, str], int] = {}
     for key, value in registry.get("source_to_amethys_id", {}).items():
-        source, separator, external_id = str(key).partition(":")
-        if separator and source and external_id:
-            source_ids[(source, external_id)] = int(value)
+        identity = split_source_identity_key(str(key))
+        if identity is not None:
+            source_ids[identity] = int(value)
     for igdb_id, amethys_id in igdb_to_amethys.items():
         source_ids.setdefault(("igdb", str(igdb_id)), amethys_id)
 

@@ -435,10 +435,16 @@ def main() -> None:
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     index_rows = connection.execute(
-        "SELECT amethys_id, name, slug, genres_json FROM games ORDER BY amethys_id"
+        "SELECT amethys_id, name, slug, genres_json, cover_url FROM games ORDER BY amethys_id"
     )
     search_index = [
-        [int(row["amethys_id"]), row["name"], row["slug"], json.loads(row["genres_json"] or "[]")]
+        [
+            int(row["amethys_id"]),
+            row["name"],
+            row["slug"],
+            json.loads(row["genres_json"] or "[]"),
+            row["cover_url"],
+        ]
         for row in index_rows
     ]
     index_info = write_zstd_json(index_dir / "games-index.json.zst", search_index)

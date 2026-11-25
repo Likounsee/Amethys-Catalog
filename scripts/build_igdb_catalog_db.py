@@ -545,7 +545,7 @@ def main() -> None:
         "search_index": {
             **index_info,
             "format": "json-array-zstd",
-            "record_fields": ["amethys_id", "name", "slug", "genres"],
+            "record_fields": ["amethys_id", "name", "slug", "genres", "cover_url"],
         },
         "shards": {
             "scheme": "amethys-id-range-v1",

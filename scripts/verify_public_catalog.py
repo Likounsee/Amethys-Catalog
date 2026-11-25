@@ -31,6 +31,20 @@ def main() -> None:
     assert len(index) == manifest["game_count"]
     ids = [int(item[0]) for item in index]
     assert len(ids) == len(set(ids)), "duplicate Amethys IDs in search index"
+    for row in index:
+        assert isinstance(row, list) and 4 <= len(row) <= 5, (
+            "search index rows must contain identity, title, slug, genres and optional cover URL"
+        )
+        assert isinstance(row[1], str) and row[1].strip(), (
+            f"search index row {row[0]} has an empty title"
+        )
+        assert isinstance(row[3], list), (
+            f"search index row {row[0]} has invalid genres"
+        )
+        if len(row) == 5 and row[4] is not None:
+            assert isinstance(row[4], str) and row[4].startswith("https://"), (
+                f"search index row {row[0]} has an invalid cover URL"
+            )
 
     shard_total = 0
     shard_ids = set()

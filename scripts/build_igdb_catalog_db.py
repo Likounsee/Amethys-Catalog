@@ -168,7 +168,7 @@ def is_valid_store_url(value: str) -> bool:
     if (
         len(value) > 2048
         or any(ord(character) <= 0x20 or ord(character) == 0x7F for character in value)
-        or "\\\\" in value
+        or "\\" in value
     ):
         return False
     try:
@@ -188,7 +188,7 @@ def is_valid_cover_url(value: str) -> bool:
     if (
         len(value) > 2048
         or any(ord(character) <= 0x20 or ord(character) == 0x7F for character in value)
-        or "\\\\" in value
+        or "\\" in value
     ):
         return False
     try:

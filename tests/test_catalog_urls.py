@@ -103,7 +103,7 @@ class StoreRecordTests(unittest.TestCase):
             ("steam", "570", "Dota 2", "https://store.steampowered.com/app/570/"),
         )
 
-    def test_rejects_invalid_store_urls_without_fallback(self) -> None:
+    def test_invalid_steam_urls_fall_back_to_generated_official_url(self) -> None:
         for url in (
             "http://store.steampowered.com/app/570/",
             "https://attacker.example/game",
@@ -111,7 +111,7 @@ class StoreRecordTests(unittest.TestCase):
             "https://store.steampowered.com:8443/app/570/",
         ):
             with self.subTest(url=url):
-                self.assertIsNone(
+                self.assertEqual(
                     store_record(
                         {"name": "Dota 2"},
                         {
@@ -119,8 +119,20 @@ class StoreRecordTests(unittest.TestCase):
                             "uid": "123",
                             "url": url,
                         },
-                    )
+                    ),
+                    ("steam", "123", "Dota 2", "https://store.steampowered.com/app/123/"),
                 )
+
+    def test_invalid_non_steam_urls_are_not_published(self) -> None:
+        result = store_record(
+            {"name": "Example Game"},
+            {
+                "external_game_source": {"name": "GOG"},
+                "uid": "123",
+                "url": "https://attacker.example/game",
+            },
+        )
+        self.assertIsNone(result)
 
     def test_store_record_rejects_cross_provider_domain(self) -> None:
         result = store_record(

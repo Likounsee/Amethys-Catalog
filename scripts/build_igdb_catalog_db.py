@@ -165,7 +165,11 @@ def load_identity_state() -> tuple[
 
 
 def is_valid_store_url(value: str) -> bool:
-    if len(value) > 2048 or "\\x00" in value:
+    if (
+        len(value) > 2048
+        or any(ord(character) <= 0x20 or ord(character) == 0x7F for character in value)
+        or "\\\\" in value
+    ):
         return False
     try:
         parsed = urllib.parse.urlsplit(value)
@@ -181,7 +185,11 @@ def is_valid_store_url(value: str) -> bool:
 
 
 def is_valid_cover_url(value: str) -> bool:
-    if len(value) > 2048 or "\\x00" in value:
+    if (
+        len(value) > 2048
+        or any(ord(character) <= 0x20 or ord(character) == 0x7F for character in value)
+        or "\\\\" in value
+    ):
         return False
     try:
         parsed = urllib.parse.urlsplit(value)

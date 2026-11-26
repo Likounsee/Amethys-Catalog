@@ -164,7 +164,19 @@ def load_identity_state() -> tuple[
     return igdb_to_amethys, known_ids, previous_external, source_ids
 
 
-def is_valid_store_url(value: str) -> bool:
+STORE_URL_HOSTS = {
+    "steam": ("steampowered.com",),
+    "gog": ("gog.com",),
+    "epic": ("epicgames.com",),
+    "ea": ("ea.com",),
+    "ubisoft": ("ubisoft.com",),
+    "battle-net": ("battle.net", "blizzard.com"),
+    "amazon-games": ("amazon.com",),
+    "humble": ("humblebundle.com",),
+}
+
+
+def is_valid_store_url(value: str, store: str | None = None) -> bool:
     if (
         len(value) > 2048
         or any(ord(character) <= 0x20 or ord(character) == 0x7F for character in value)
@@ -173,12 +185,22 @@ def is_valid_store_url(value: str) -> bool:
         return False
     try:
         parsed = urllib.parse.urlsplit(value)
-        return (
+        hostname = (parsed.hostname or "").lower().rstrip(".")
+        valid_origin = (
             parsed.scheme == "https"
-            and bool(parsed.hostname)
+            and bool(hostname)
             and parsed.username is None
             and parsed.password is None
             and parsed.port in (None, 443)
+        )
+        if not valid_origin:
+            return False
+        if store is None:
+            return True
+        allowed_hosts = STORE_URL_HOSTS.get(store)
+        return bool(allowed_hosts) and any(
+            hostname == domain or hostname.endswith("." + domain)
+            for domain in allowed_hosts
         )
     except ValueError:
         return False
@@ -214,7 +236,7 @@ def store_record(game: dict, external: dict) -> tuple[str, str, str, str] | None
     if not external_id:
         return None
     url = external.get("url")
-    if not isinstance(url, str) or not is_valid_store_url(url):
+    if not isinstance(url, str) or not is_valid_store_url(url, store):
         if store == "steam" and external_id.isdigit():
             url = f"https://store.steampowered.com/app/{external_id}/"
         else:

@@ -78,6 +78,9 @@ jobs:
           print("SQLite schema and provider-independent identity checks OK")
           PY
 
+      - name: Test catalogue URL validation
+        run: python -m unittest discover -s tests -v
+
       - name: Build catalogue from IGDB
         env:
           IGDB_CLIENT_ID: ${{ secrets.IGDB_CLIENT_ID }}

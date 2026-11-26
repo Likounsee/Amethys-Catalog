@@ -164,6 +164,38 @@ def load_identity_state() -> tuple[
     return igdb_to_amethys, known_ids, previous_external, source_ids
 
 
+def is_valid_store_url(value: str) -> bool:
+    if len(value) > 2048 or "\\x00" in value:
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        return (
+            parsed.scheme == "https"
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.port in (None, 443)
+        )
+    except ValueError:
+        return False
+
+
+def is_valid_cover_url(value: str) -> bool:
+    if len(value) > 2048 or "\\x00" in value:
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname == "images.igdb.com"
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.port in (None, 443)
+        )
+    except ValueError:
+        return False
+
+
 def store_record(game: dict, external: dict) -> tuple[str, str, str, str] | None:
     source = external.get("external_game_source") or {}
     source_name = str(source.get("name", "")).strip().lower()
@@ -174,7 +206,7 @@ def store_record(game: dict, external: dict) -> tuple[str, str, str, str] | None
     if not external_id:
         return None
     url = external.get("url")
-    if not isinstance(url, str) or not url.startswith("https://"):
+    if not isinstance(url, str) or not is_valid_store_url(url):
         if store == "steam" and external_id.isdigit():
             url = f"https://store.steampowered.com/app/{external_id}/"
         else:

@@ -8,7 +8,12 @@ from pathlib import Path
 
 import zstandard
 
-from scripts.build_igdb_catalog_db import is_valid_cover_url, is_valid_store_url
+try:
+    # Works when invoked as a module from the repository root.
+    from scripts.build_igdb_catalog_db import is_valid_cover_url, is_valid_store_url
+except ModuleNotFoundError:
+    # Direct script execution puts scripts/, not the repository root, on sys.path.
+    from build_igdb_catalog_db import is_valid_cover_url, is_valid_store_url
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public"

@@ -15,10 +15,32 @@ class StoreUrlValidationTests(unittest.TestCase):
         for value in (
             "https://store.steampowered.com/app/570/",
             "https://www.gog.com/game/example",
+            "https://store.epicgames.com/p/example",
+            "https://www.ea.com/games/example",
+            "https://store.ubisoft.com/game/example",
+            "https://us.shop.battle.net/en-us/product/example",
+            "https://gaming.amazon.com/",
+            "https://www.humblebundle.com/store/example",
             "https://example.com:443/product?id=42",
         ):
             with self.subTest(value=value):
                 self.assertTrue(is_valid_store_url(value))
+
+    def test_store_urls_must_match_the_declared_provider(self) -> None:
+        valid = {
+            "steam": "https://store.steampowered.com/app/570/",
+            "gog": "https://www.gog.com/game/example",
+            "epic": "https://store.epicgames.com/p/example",
+            "ea": "https://www.ea.com/games/example",
+            "ubisoft": "https://store.ubisoft.com/game/example",
+            "battle-net": "https://us.shop.battle.net/en-us/product/example",
+            "amazon-games": "https://gaming.amazon.com/",
+            "humble": "https://www.humblebundle.com/store/example",
+        }
+        for store, url in valid.items():
+            with self.subTest(store=store):
+                self.assertTrue(is_valid_store_url(url, store))
+                self.assertFalse(is_valid_store_url("https://attacker.example/game", store))
 
     def test_rejects_unsafe_or_malformed_store_urls(self) -> None:
         for value in (
@@ -93,7 +115,7 @@ class StoreRecordTests(unittest.TestCase):
                     store_record(
                         {"name": "Dota 2"},
                         {
-                            "external_game_source": {"name": "GOG"},
+                            "external_game_source": {"name": "Steam"},
                             "uid": "123",
                             "url": url,
                         },

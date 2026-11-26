@@ -10,10 +10,10 @@ import zstandard
 
 try:
     # Works when invoked as a module from the repository root.
-    from scripts.build_igdb_catalog_db import is_valid_cover_url, is_valid_store_url
+    from scripts.build_igdb_catalog_db import STORE_URL_HOSTS, is_valid_cover_url, is_valid_store_url
 except ModuleNotFoundError:
     # Direct script execution puts scripts/, not the repository root, on sys.path.
-    from build_igdb_catalog_db import is_valid_cover_url, is_valid_store_url
+    from build_igdb_catalog_db import STORE_URL_HOSTS, is_valid_cover_url, is_valid_store_url
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public"
@@ -75,11 +75,18 @@ def main() -> None:
                 f"game {game_id} has an invalid store identity list"
             )
             for store in stores:
+                assert isinstance(store, dict), (
+                    f"game {game_id} has an invalid store identity record"
+                )
+                store_name = store.get("store")
+                assert isinstance(store_name, str) and store_name in STORE_URL_HOSTS, (
+                    f"game {game_id} has an unsupported store identity"
+                )
                 store_url = store.get("url")
                 assert store_url is None or (
                     isinstance(store_url, str)
-                    and is_valid_store_url(store_url, store.get("store"))
-                ), f"game {game_id} has an invalid store URL for {store.get('store')}"
+                    and is_valid_store_url(store_url, store_name)
+                ), f"game {game_id} has an invalid store URL for {store_name}"
             verified_store_identities += len(stores)
             source_ids = record.get("source_ids", [])
             assert isinstance(source_ids, list), (

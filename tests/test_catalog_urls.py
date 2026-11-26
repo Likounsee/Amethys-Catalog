@@ -122,6 +122,18 @@ class StoreRecordTests(unittest.TestCase):
                     )
                 )
 
+    def test_store_record_rejects_cross_provider_domain(self) -> None:
+        result = store_record(
+            {"name": "Example Game"},
+            {
+                "external_game_source": {"name": "GOG"},
+                "uid": "123",
+                "name": "Example Game",
+                "url": "https://store.steampowered.com/app/123/",
+            },
+        )
+        self.assertIsNone(result)
+
     def test_only_numeric_steam_ids_get_generated_urls(self) -> None:
         self.assertIsNone(
             store_record(

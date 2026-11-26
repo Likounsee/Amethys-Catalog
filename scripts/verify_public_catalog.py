@@ -8,6 +8,8 @@ from pathlib import Path
 
 import zstandard
 
+from scripts.build_igdb_catalog_db import is_valid_cover_url, is_valid_store_url
+
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public"
 
@@ -42,7 +44,7 @@ def main() -> None:
             f"search index row {row[0]} has invalid genres"
         )
         if len(row) == 5 and row[4] is not None:
-            assert isinstance(row[4], str) and row[4].startswith("https://"), (
+            assert isinstance(row[4], str) and is_valid_cover_url(row[4]), (
                 f"search index row {row[0]} has an invalid cover URL"
             )
 
@@ -59,10 +61,19 @@ def main() -> None:
         assert len(records) == item["game_count"], item["file"]
         for record in records:
             game_id = int(record["amethys_id"])
+            cover_url = record.get("cover_url")
+            assert cover_url is None or (
+                isinstance(cover_url, str) and is_valid_cover_url(cover_url)
+            ), f"game {game_id} has an invalid cover URL"
             stores = record.get("stores", [])
             assert isinstance(stores, list), (
                 f"game {game_id} has an invalid store identity list"
             )
+            for store in stores:
+                store_url = store.get("url")
+                assert store_url is None or (
+                    isinstance(store_url, str) and is_valid_store_url(store_url)
+                ), f"game {game_id} has an invalid store URL"
             verified_store_identities += len(stores)
             source_ids = record.get("source_ids", [])
             assert isinstance(source_ids, list), (

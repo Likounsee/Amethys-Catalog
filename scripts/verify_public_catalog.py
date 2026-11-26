@@ -77,8 +77,9 @@ def main() -> None:
             for store in stores:
                 store_url = store.get("url")
                 assert store_url is None or (
-                    isinstance(store_url, str) and is_valid_store_url(store_url)
-                ), f"game {game_id} has an invalid store URL"
+                    isinstance(store_url, str)
+                    and is_valid_store_url(store_url, store.get("store"))
+                ), f"game {game_id} has an invalid store URL for {store.get('store')}"
             verified_store_identities += len(stores)
             source_ids = record.get("source_ids", [])
             assert isinstance(source_ids, list), (

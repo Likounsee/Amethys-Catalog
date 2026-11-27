@@ -304,9 +304,9 @@ def import_store_promotions(connection: sqlite3.Connection, generated_at: str) -
         product_key = (store, external_id)
         if product_key in seen_products:
             raise ValueError(f"Multiple current promotion records for {store}/{external_id}")
-        if not isinstance(current_price, int) or isinstance(current_price, bool) or current_price <= 0:
+        if not isinstance(current_price, int) or isinstance(current_price, bool) or current_price < 0 or current_price > 9_223_372_036_854_775_807:
             raise ValueError(f"Promotion {promotion_id} has an invalid current price")
-        if not isinstance(regular_price, int) or isinstance(regular_price, bool) or regular_price <= current_price:
+        if not isinstance(regular_price, int) or isinstance(regular_price, bool) or regular_price <= current_price or regular_price > 9_223_372_036_854_775_807:
             raise ValueError(f"Promotion {promotion_id} regular price must exceed its current price")
         if not isinstance(currency, str) or len(currency) != 3 or not currency.isascii() or not currency.isalpha() or currency != currency.upper():
             raise ValueError(f"Promotion {promotion_id} must use an uppercase ISO currency code")

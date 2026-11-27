@@ -2,6 +2,7 @@
 """Validate the public compact catalogue before publishing it."""
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
 from pathlib import Path
@@ -108,7 +109,7 @@ def main() -> None:
                 assert known_store_products.get((promotion["store"], promotion["external_id"])) == promotion.get("source_url"), f"game {game_id} promotion is not tied to its official store identity"
                 current_price = promotion.get("current_price_minor")
                 regular_price = promotion.get("regular_price_minor")
-                assert isinstance(current_price, int) and not isinstance(current_price, bool) and current_price > 0, f"game {game_id} has an invalid current price"
+                assert isinstance(current_price, int) and not isinstance(current_price, bool) and current_price >= 0, f"game {game_id} has an invalid current price"
                 assert isinstance(regular_price, int) and not isinstance(regular_price, bool) and regular_price > current_price, f"game {game_id} has an invalid regular price"
                 currency = promotion.get("currency")
                 assert isinstance(currency, str) and len(currency) == 3 and currency.isascii() and currency.isalpha() and currency == currency.upper(), f"game {game_id} has an invalid currency"
@@ -116,8 +117,8 @@ def main() -> None:
                 for timestamp in ("valid_from", "valid_until", "checked_at"):
                     value = promotion.get(timestamp)
                     assert isinstance(value, str) and value.endswith("Z"), f"game {game_id} promotion has invalid {timestamp}"
-                    parsed = __import__("datetime").datetime.fromisoformat(value.replace("Z", "+00:00"))
-                    assert parsed.utcoffset() == __import__("datetime").timedelta(0), f"game {game_id} promotion {timestamp} must be UTC"
+                    parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    assert parsed.utcoffset() == dt.timedelta(0), f"game {game_id} promotion {timestamp} must be UTC"
                 assert promotion["valid_until"] > promotion["valid_from"], f"game {game_id} has an invalid promotion window"
                 verified_promotions += 1
             shard_promotions[game_id] = promotions

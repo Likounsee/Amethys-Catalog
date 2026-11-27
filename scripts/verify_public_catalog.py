@@ -28,6 +28,7 @@ def main() -> None:
     assert manifest["manifest_schema_version"] == 2
     assert manifest["game_count"] > 0
     assert manifest["shards"]["game_count"] == manifest["game_count"]
+    assert manifest.get("promotion_count", 0) >= 0
 
     index_meta = manifest["search_index"]
     index_path = PUBLIC / index_meta["file"]
@@ -37,10 +38,11 @@ def main() -> None:
     index = json.loads(zstandard.ZstdDecompressor().decompress(index_bytes))
     assert len(index) == manifest["game_count"]
     ids = [int(item[0]) for item in index]
+    search_promotions: dict[int, list[dict]] = {}
     assert len(ids) == len(set(ids)), "duplicate Amethys IDs in search index"
     for row in index:
-        assert isinstance(row, list) and 4 <= len(row) <= 5, (
-            "search index rows must contain identity, title, slug, genres and optional cover URL"
+        assert isinstance(row, list) and 4 <= len(row) <= 6, (
+            "search index rows must contain identity, title, slug, genres, optional cover and promotions"
         )
         assert isinstance(row[1], str) and row[1].strip(), (
             f"search index row {row[0]} has an empty title"
@@ -48,15 +50,20 @@ def main() -> None:
         assert isinstance(row[3], list), (
             f"search index row {row[0]} has invalid genres"
         )
-        if len(row) == 5 and row[4] is not None:
+        if len(row) >= 5 and row[4] is not None:
             assert isinstance(row[4], str) and is_valid_cover_url(row[4]), (
                 f"search index row {row[0]} has an invalid cover URL"
             )
+        promotions = row[5] if len(row) == 6 else []
+        assert isinstance(promotions, list), f"search index row {row[0]} has invalid promotions"
+        search_promotions[int(row[0])] = promotions
 
     shard_total = 0
     shard_ids = set()
     verified_store_identities = 0
     verified_source_identities = 0
+    verified_promotions = 0
+    shard_promotions: dict[int, list[dict]] = {}
     for item in manifest["shards"]["files"]:
         path = PUBLIC / item["file"]
         compressed = path.read_bytes()
@@ -88,6 +95,32 @@ def main() -> None:
                     and is_valid_store_url(store_url, store_name)
                 ), f"game {game_id} has an invalid store URL for {store_name}"
             verified_store_identities += len(stores)
+            promotions = record.get("promotions", [])
+            assert isinstance(promotions, list), f"game {game_id} has invalid promotions"
+            known_store_products = {
+                (store.get("store"), store.get("external_id")): store.get("url")
+                for store in stores
+            }
+            for promotion in promotions:
+                assert isinstance(promotion, dict), f"game {game_id} has an invalid promotion"
+                assert promotion.get("store") in STORE_URL_HOSTS, f"game {game_id} has an unsupported promotion store"
+                assert isinstance(promotion.get("external_id"), str) and promotion["external_id"], f"game {game_id} has an invalid promotion product ID"
+                assert known_store_products.get((promotion["store"], promotion["external_id"])) == promotion.get("source_url"), f"game {game_id} promotion is not tied to its official store identity"
+                current_price = promotion.get("current_price_minor")
+                regular_price = promotion.get("regular_price_minor")
+                assert isinstance(current_price, int) and not isinstance(current_price, bool) and current_price > 0, f"game {game_id} has an invalid current price"
+                assert isinstance(regular_price, int) and not isinstance(regular_price, bool) and regular_price > current_price, f"game {game_id} has an invalid regular price"
+                currency = promotion.get("currency")
+                assert isinstance(currency, str) and len(currency) == 3 and currency.isascii() and currency.isalpha() and currency == currency.upper(), f"game {game_id} has an invalid currency"
+                assert is_valid_store_url(promotion.get("source_url", ""), promotion["store"]), f"game {game_id} has an invalid promotion source URL"
+                for timestamp in ("valid_from", "valid_until", "checked_at"):
+                    value = promotion.get(timestamp)
+                    assert isinstance(value, str) and value.endswith("Z"), f"game {game_id} promotion has invalid {timestamp}"
+                    parsed = __import__("datetime").datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    assert parsed.utcoffset() == __import__("datetime").timedelta(0), f"game {game_id} promotion {timestamp} must be UTC"
+                assert promotion["valid_until"] > promotion["valid_from"], f"game {game_id} has an invalid promotion window"
+                verified_promotions += 1
+            shard_promotions[game_id] = promotions
             source_ids = record.get("source_ids", [])
             assert isinstance(source_ids, list), (
                 f"game {game_id} has an invalid source identity list"
@@ -124,6 +157,10 @@ def main() -> None:
     assert verified_source_identities == manifest["source_identity_count"], (
         "manifest source identity count does not match detail shards"
     )
+    assert verified_promotions == manifest.get("promotion_count", 0), (
+        "manifest promotion count does not match detail shards"
+    )
+    assert search_promotions == shard_promotions, "search index and detail shards disagree on promotions"
     genres_meta = manifest["metadata"]["genres"]
     genres_path = PUBLIC / genres_meta["file"]
     genres_bytes = genres_path.read_bytes()
@@ -131,7 +168,8 @@ def main() -> None:
     print(
         f"Validated {len(ids)} games, {len(manifest['shards']['files'])} shards "
         f"and {manifest['store_identity_count']} store identities "
-        f"plus {manifest['source_identity_count']} source identities."
+        f"plus {manifest['source_identity_count']} source identities and "
+        f"{verified_promotions} verified promotions."
     )
 
 

@@ -540,7 +540,7 @@ def main() -> None:
         connection.executemany(
             "INSERT INTO catalog_meta(key, value) VALUES (?, ?)",
             [
-                ("schema_version", "2"),
+                ("schema_version", "3"),
                 ("source", "IGDB"),
                 ("platform_filter", "Windows PC (IGDB platform 6)"),
                 ("category_filter", "0"),
@@ -721,7 +721,7 @@ def main() -> None:
 
     manifest = {
         "manifest_schema_version": 2,
-        "catalog_schema_version": 2,
+        "catalog_schema_version": 3,
         "catalog_version": generated_at,
         "generated_at": generated_at,
         "source": "IGDB",

@@ -7,6 +7,7 @@ on:
       - "scripts/build_igdb_catalog_db.py"
       - "scripts/catalog_schema.sql"
       - "scripts/verify_public_catalog.py"
+      - "catalogs/store-promotions-v1.json"
       - "tests/**"
       - ".github/workflows/publish-catalog.yml"
   schedule:
@@ -48,7 +49,7 @@ jobs:
 
       - name: Validate generator and SQLite schema
         run: |
-          python -m py_compile scripts/build_igdb_catalog_db.py
+          python -m py_compile scripts/build_igdb_catalog_db.py scripts/verify_public_catalog.py
           python - <<'PY'
           import sqlite3
           from pathlib import Path
@@ -56,7 +57,7 @@ jobs:
           db.executescript(Path("scripts/catalog_schema.sql").read_text(encoding="utf-8"))
           assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
           assert {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} >= {
-              "games", "game_source_ids", "game_stores", "catalog_meta"
+              "games", "game_source_ids", "game_stores", "store_promotions", "catalog_meta"
           }
           game_columns = {row[1]: row[5] for row in db.execute("PRAGMA table_info(games)")}
           assert game_columns["amethys_id"] == 1, "Amethys ID must be the games primary key"
@@ -76,7 +77,17 @@ jobs:
           from scripts.build_igdb_catalog_db import split_source_identity_key
           assert split_source_identity_key("igdb:42") == ("igdb", "42")
           assert split_source_identity_key("store:steam:570") == ("store:steam", "570")
-          print("SQLite schema and provider-independent identity checks OK")
+          db.execute(
+              """INSERT INTO store_promotions
+                 (promotion_id, amethys_id, store, external_id, current_price_minor,
+                  regular_price_minor, currency, valid_from, valid_until, checked_at, source_url)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+              ("promotion-test", 1001, "steam", "test-product-1", 500, 1000, "EUR",
+               "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z",
+               "2026-01-01T00:00:00Z", "https://store.steampowered.com/app/1/"),
+          )
+          assert db.execute("SELECT COUNT(*) FROM store_promotions").fetchone()[0] == 1
+          print("SQLite schema, stable identity and promotion checks OK")
           PY
 
       - name: Test catalogue URL validation

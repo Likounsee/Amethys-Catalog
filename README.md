@@ -32,3 +32,19 @@ The workflow also runs every Monday at 04:17 UTC. The current ingestion adapter 
 The current data import covers Windows PC main games from IGDB. Amethys IDs are the canonical primary keys in the catalogue database; IGDB and store identifiers are recorded separately in the generic source-identity table and registry. The current importer writes IGDB and supported store identities into that mapping. Supported store identities (Steam, GOG, Epic, EA, Ubisoft, Battle.net, Amazon Games and Humble) are optional metadata: a game remains in the master catalogue even when no supported offer is currently known. Unknown store identities are omitted, not used to discard the game. The catalogue does not contain user accounts, entitlements, local paths, installations, download state, or commercial game files.
 
 Respect IGDB's applicable attribution and partnership requirements before commercial distribution.
+
+
+## Official store promotions
+
+The public feed accepts manually curated promotion records in
+`catalogs/store-promotions-v1.json`. A record is published only when it matches
+an existing Amethys game and its exact supported store product identity, uses
+the store's HTTPS product URL, provides integer prices in minor currency units,
+and includes a UTC validity window and verification timestamp. The launcher
+can derive the displayed discount from the two prices; no percentage is
+accepted as an independent source of truth.
+
+The promotion feed is intentionally empty until verified source data is
+available. IGDB supplies game metadata and store identities, not live prices or
+discounts. No price is inferred from metadata, scraped from an unapproved
+source, or fabricated by the catalogue builder.

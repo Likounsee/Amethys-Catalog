@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "scripts" / "catalog_schema.sql"
 MASTER_JSON = ROOT / "catalogs" / "master-games-v1.json"
 REGISTRY_PATH = ROOT / "catalogs" / "amethys-id-registry.json"
+PROMOTIONS_PATH = ROOT / "catalogs" / "store-promotions-v1.json"
 DB_PATH = ROOT / "catalog.db"
 COMPRESSED_PATH = ROOT / "catalog.db.zst"
 TOKEN_URL = "https://id.twitch.tv/oauth2/token"
@@ -245,6 +246,107 @@ def store_record(game: dict, external: dict) -> tuple[str, str, str, str] | None
     return store, external_id, name, url
 
 
+
+
+def parse_utc_timestamp(value: object, label: str) -> str:
+    if not isinstance(value, str) or len(value) > 40:
+        raise ValueError(f"{label} must be an RFC 3339 UTC timestamp")
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError(f"{label} must be an RFC 3339 UTC timestamp") from None
+    if parsed.tzinfo is None or parsed.utcoffset() != dt.timedelta(0):
+        raise ValueError(f"{label} must use the UTC timezone")
+    return parsed.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def import_store_promotions(connection: sqlite3.Connection, generated_at: str) -> int:
+    """Import manually curated offers verified against official store pages."""
+    if not PROMOTIONS_PATH.is_file():
+        raise RuntimeError(f"Promotion feed is missing: {PROMOTIONS_PATH}")
+    document = json.loads(PROMOTIONS_PATH.read_text(encoding="utf-8"))
+    if not isinstance(document, dict) or document.get("schema_version") != 1:
+        raise ValueError("Promotion feed schema_version must be 1")
+    offers = document.get("offers")
+    if not isinstance(offers, list) or len(offers) > 100_000:
+        raise ValueError("Promotion feed offers must be an array with at most 100000 entries")
+
+    generated = dt.datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+    seen_ids: set[str] = set()
+    seen_products: set[tuple[str, str]] = set()
+    imported = 0
+    allowed = {
+        "promotion_id", "amethys_id", "store", "external_id",
+        "current_price_minor", "regular_price_minor", "currency",
+        "valid_from", "valid_until", "checked_at", "source_url",
+    }
+    for offer in offers:
+        if not isinstance(offer, dict) or set(offer) != allowed:
+            raise ValueError("Every promotion must contain exactly the documented fields")
+        promotion_id = offer["promotion_id"]
+        store = offer["store"]
+        external_id = offer["external_id"]
+        currency = offer["currency"]
+        source_url = offer["source_url"]
+        amethys_id = offer["amethys_id"]
+        current_price = offer["current_price_minor"]
+        regular_price = offer["regular_price_minor"]
+        if not isinstance(promotion_id, str) or not promotion_id.strip() or len(promotion_id) > 128:
+            raise ValueError("Promotion ID must be a non-empty string of at most 128 characters")
+        if promotion_id in seen_ids:
+            raise ValueError(f"Duplicate promotion ID: {promotion_id}")
+        if not isinstance(amethys_id, int) or isinstance(amethys_id, bool) or amethys_id <= 0:
+            raise ValueError(f"Promotion {promotion_id} has an invalid Amethys ID")
+        if not isinstance(store, str) or store not in STORE_URL_HOSTS:
+            raise ValueError(f"Promotion {promotion_id} uses an unsupported store")
+        if not isinstance(external_id, str) or not external_id.strip() or len(external_id) > 512:
+            raise ValueError(f"Promotion {promotion_id} has an invalid store product ID")
+        product_key = (store, external_id)
+        if product_key in seen_products:
+            raise ValueError(f"Multiple current promotion records for {store}/{external_id}")
+        if not isinstance(current_price, int) or isinstance(current_price, bool) or current_price <= 0:
+            raise ValueError(f"Promotion {promotion_id} has an invalid current price")
+        if not isinstance(regular_price, int) or isinstance(regular_price, bool) or regular_price <= current_price:
+            raise ValueError(f"Promotion {promotion_id} regular price must exceed its current price")
+        if not isinstance(currency, str) or len(currency) != 3 or not currency.isascii() or not currency.isalpha() or currency != currency.upper():
+            raise ValueError(f"Promotion {promotion_id} must use an uppercase ISO currency code")
+        if not isinstance(source_url, str) or not is_valid_store_url(source_url, store):
+            raise ValueError(f"Promotion {promotion_id} must cite a valid official {store} HTTPS page")
+
+        valid_from = parse_utc_timestamp(offer["valid_from"], "valid_from")
+        valid_until = parse_utc_timestamp(offer["valid_until"], "valid_until")
+        checked_at = parse_utc_timestamp(offer["checked_at"], "checked_at")
+        if valid_until <= valid_from:
+            raise ValueError(f"Promotion {promotion_id} has an invalid validity window")
+        if dt.datetime.fromisoformat(checked_at.replace("Z", "+00:00")) > generated:
+            raise ValueError(f"Promotion {promotion_id} was checked after this catalogue build")
+        game_store = connection.execute(
+            "SELECT store_url FROM game_stores WHERE amethys_id = ? AND store = ? AND external_id = ?",
+            (amethys_id, store, external_id),
+        ).fetchone()
+        if game_store is None:
+            raise ValueError(
+                f"Promotion {promotion_id} does not match a known Amethys game/store identity"
+            )
+        if game_store[0] != source_url:
+            raise ValueError(
+                f"Promotion {promotion_id} source URL must exactly match the catalogue's official store URL"
+            )
+
+        connection.execute(
+            """INSERT INTO store_promotions
+               (promotion_id, amethys_id, store, external_id, current_price_minor,
+                regular_price_minor, currency, valid_from, valid_until, checked_at, source_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (promotion_id, amethys_id, store, external_id, current_price, regular_price,
+             currency, valid_from, valid_until, checked_at, source_url),
+        )
+        seen_ids.add(promotion_id)
+        seen_products.add(product_key)
+        imported += 1
+    return imported
+
+
 def main() -> None:
     client_id = os.environ.get("IGDB_CLIENT_ID", "").strip()
     client_secret = os.environ.get("IGDB_CLIENT_SECRET", "").strip()
@@ -266,6 +368,7 @@ def main() -> None:
     inserted_games = 0
     inserted_stores = 0
     skipped_duplicate_store_ids = 0
+    inserted_promotions = 0
     last_igdb_id = 0
     fields = (
         "id,name,category,version_parent,slug,summary,first_release_date,cover.image_id,genres.name,"
@@ -433,6 +536,7 @@ def main() -> None:
                 "zero records. Refusing to publish an empty catalogue."
             )
 
+        inserted_promotions = import_store_promotions(connection, generated_at)
         connection.executemany(
             "INSERT INTO catalog_meta(key, value) VALUES (?, ?)",
             [
@@ -443,6 +547,7 @@ def main() -> None:
                 ("generated_at", generated_at),
                 ("game_count", str(inserted_games)),
                 ("store_identity_count", str(inserted_stores)),
+                ("promotion_count", str(inserted_promotions)),
             ],
         )
         connection.execute("ANALYZE")
@@ -499,6 +604,24 @@ def main() -> None:
     index_rows = connection.execute(
         "SELECT amethys_id, name, slug, genres_json, cover_url FROM games ORDER BY amethys_id"
     )
+    promotions_by_game: dict[int, list[dict]] = {}
+    for promotion in connection.execute(
+        """SELECT promotion_id, amethys_id, store, external_id, current_price_minor,
+                  regular_price_minor, currency, valid_from, valid_until, checked_at, source_url
+           FROM store_promotions ORDER BY valid_until, store"""
+    ):
+        promotions_by_game.setdefault(int(promotion["amethys_id"]), []).append({
+            "promotion_id": promotion["promotion_id"],
+            "store": promotion["store"],
+            "external_id": promotion["external_id"],
+            "current_price_minor": int(promotion["current_price_minor"]),
+            "regular_price_minor": int(promotion["regular_price_minor"]),
+            "currency": promotion["currency"],
+            "valid_from": promotion["valid_from"],
+            "valid_until": promotion["valid_until"],
+            "checked_at": promotion["checked_at"],
+            "source_url": promotion["source_url"],
+        })
     search_index = [
         [
             int(row["amethys_id"]),
@@ -506,6 +629,7 @@ def main() -> None:
             row["slug"],
             json.loads(row["genres_json"] or "[]"),
             row["cover_url"],
+            promotions_by_game.get(int(row["amethys_id"]), []),
         ]
         for row in index_rows
     ]
@@ -566,6 +690,7 @@ def main() -> None:
                     )
                 ],
                 "stores": [],
+                "promotions": promotions_by_game.get(int(row["amethys_id"]), []),
             }
             genres_seen.update(current_record["genres"])
         if row["store"] is not None:
@@ -604,10 +729,11 @@ def main() -> None:
         "game_count": inserted_games,
         "store_identity_count": inserted_stores,
         "source_identity_count": source_identity_count,
+        "promotion_count": inserted_promotions,
         "search_index": {
             **index_info,
             "format": "json-array-zstd",
-            "record_fields": ["amethys_id", "name", "slug", "genres", "cover_url"],
+            "record_fields": ["amethys_id", "name", "slug", "genres", "cover_url", "promotions"],
         },
         "shards": {
             "scheme": "amethys-id-range-v1",
@@ -623,7 +749,7 @@ def main() -> None:
     print(
         f"Built {inserted_games} Windows PC games with {inserted_stores} supported store identities; "
         f"and skipped {skipped_duplicate_store_ids} duplicate store identities; "
-        f"published {len(shard_manifest)} detail shards. "
+        f"published {inserted_promotions} verified promotions and {len(shard_manifest)} detail shards. "
         f"Search index={index_info['compressed_size']:,} bytes."
     )
 

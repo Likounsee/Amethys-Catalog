@@ -27,6 +27,7 @@ def sha256(data: bytes) -> str:
 def main() -> None:
     manifest = json.loads((PUBLIC / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["manifest_schema_version"] == 2
+    assert manifest["catalog_schema_version"] == 3
     assert manifest["game_count"] > 0
     assert manifest["shards"]["game_count"] == manifest["game_count"]
     assert manifest.get("promotion_count", 0) >= 0

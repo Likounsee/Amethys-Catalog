@@ -46,3 +46,24 @@ CREATE INDEX idx_games_slug ON games(slug);
 CREATE INDEX idx_game_source_ids_amethys_id ON game_source_ids(amethys_id);
 CREATE INDEX idx_game_stores_game ON game_stores(amethys_id);
 CREATE INDEX idx_game_stores_store_id ON game_stores(store, external_id);
+
+
+-- Curated official store promotions. Prices are integer minor units and are
+-- published only with an official product URL and a recent verification time.
+CREATE TABLE store_promotions (
+    promotion_id       TEXT PRIMARY KEY NOT NULL,
+    amethys_id         INTEGER NOT NULL REFERENCES games(amethys_id) ON DELETE CASCADE,
+    store              TEXT NOT NULL,
+    external_id        TEXT NOT NULL,
+    current_price_minor INTEGER NOT NULL CHECK (current_price_minor > 0),
+    regular_price_minor INTEGER NOT NULL CHECK (regular_price_minor > current_price_minor),
+    currency           TEXT NOT NULL CHECK (currency GLOB '[A-Z][A-Z][A-Z]'),
+    valid_from         TEXT NOT NULL,
+    valid_until        TEXT NOT NULL,
+    checked_at         TEXT NOT NULL,
+    source_url         TEXT NOT NULL,
+    CHECK (valid_until > valid_from),
+    UNIQUE (store, external_id)
+);
+CREATE INDEX idx_store_promotions_game ON store_promotions(amethys_id);
+CREATE INDEX idx_store_promotions_validity ON store_promotions(valid_from, valid_until);

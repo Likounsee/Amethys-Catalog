@@ -55,7 +55,7 @@ CREATE TABLE store_promotions (
     amethys_id         INTEGER NOT NULL REFERENCES games(amethys_id) ON DELETE CASCADE,
     store              TEXT NOT NULL,
     external_id        TEXT NOT NULL,
-    current_price_minor INTEGER NOT NULL CHECK (current_price_minor > 0),
+    current_price_minor INTEGER NOT NULL CHECK (current_price_minor >= 0),
     regular_price_minor INTEGER NOT NULL CHECK (regular_price_minor > current_price_minor),
     currency           TEXT NOT NULL CHECK (currency GLOB '[A-Z][A-Z][A-Z]'),
     valid_from         TEXT NOT NULL,
